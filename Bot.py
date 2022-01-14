@@ -1,15 +1,20 @@
+import os
+
 from PIL import Image, ImageGrab
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 from Mouse import *
 from colorama import Fore
 
 
 class Bot:
-    def __init__(self):
+    def __init__(self, menu):
+        self._menu = menu
         self._PATH = 'C:\\Program Files (x86)\\chromedriver.exe'
         self._ser = Service(self._PATH)
         self._driver = None
@@ -27,9 +32,12 @@ class Bot:
         self._probablilities = list()
         self._numMines = 0
         self._guesses = 0
+        self._cap = 10
 
     def launch(self):
-        self._driver = webdriver.Chrome(service=self._ser)
+        options = Options()
+        options.add_argument("--disable-notifications")
+        self._driver = webdriver.Chrome(service=self._ser, options=options)
         self._driver.maximize_window()
         self._driver.get("https://minesweeperonline.com/")
         try:
@@ -40,6 +48,10 @@ class Bot:
             self._driver.quit()
 
     def setDifficulty(self, diff):
+        self._menu.print("Difficulty set to: " + diff)
+        if not self._menu._opened:
+            return
+
         self._options.click()
         try:
             WebDriverWait(self._driver, 10).until(EC.presence_of_element_located((By.ID, "options-close")))
@@ -59,6 +71,16 @@ class Bot:
             self._driver.find_element(By.ID, "expert").click()
             self._size = (16, 30)
             self._numMines = 99
+        else:
+            self._driver.find_element(By.ID, "custom").click()
+            self._driver.find_element(By.ID, "custom_height").clear()
+            self._driver.find_element(By.ID, "custom_height").send_keys(self._menu._SBoxH.get().strip())
+            self._driver.find_element(By.ID, "custom_width").clear()
+            self._driver.find_element(By.ID, "custom_width").send_keys(self._menu._SBoxW.get().strip())
+            self._driver.find_element(By.ID, "custom_mines").clear()
+            self._driver.find_element(By.ID, "custom_mines").send_keys(self._menu._SBoxMines.get().strip())
+            self._size = (int(self._menu._SBoxH.get().strip()), int(self._menu._SBoxW.get().strip()))
+            self._numMines = int(self._menu._SBoxMines.get().strip())
 
         self.initializeBoard()
         self._driver.find_element(By.CLASS_NAME, "dialogText").click()
@@ -68,6 +90,7 @@ class Bot:
         mousePos(self.mouseCoords((round(self._size[0] / 2), round(self._size[1] / 2))))
         leftClick()
         self.getBoard()
+        # im.save(os.getcwd() + '\\full_snap__' + str(int(time.time())) + '.png', 'PNG')
 
         # loop while
         while any(9 in sublist for sublist in self._board) and not (any(-69 in sublist for sublist in self._board)) :
@@ -97,6 +120,9 @@ class Bot:
             if not (len(self._RClickMoves) == len(self._LClickMoves) == 0):
                 continue
 
+            self._menu.print("Calculating possible mine configurations\n"
+                             "This may take a moment, please wait...")
+
             for i in range(self._size[0]):
                 for j in range(self._size[1]):
                     # skip if tile is empty
@@ -121,13 +147,9 @@ class Bot:
                 for l in range(len(self._probablilities[k])):
                     try:
                         self._probablilities[k][l] /= len(self._possibleMines[k])
-                    except(ZeroDivisionError):
+                    except ZeroDivisionError:
                         print(self._guesses)
                         return
-
-            print(self._guesses)
-            print2DList(self._constrainedTiles)
-            print2DList(self._probablilities)
 
             maxProb = (0, 0)
             for i in range(len(self._constrainedTiles)):
@@ -142,13 +164,15 @@ class Bot:
 
             if len(self._RClickMoves) == len(self._LClickMoves) == 0 and not len(self._probablilities) == 0:
                 self._guesses += 1
-                if self._probablilities[maxProb[0]][maxProb[1]] < 0.5:
+                self._menu.print("All remaining tiles have a chance of being a mine,")
+                if self._probablilities[maxProb[0]][maxProb[1]] <= 0.5:
+                    self._menu.print("Opening a tile which has a " + str(round(self._probablilities[maxProb[0]][maxProb[1]] * 100, 2)) + "% chance of being a mine")
                     self._LClickMoves.add(self._constrainedTiles[maxProb[0]][maxProb[1]])
                 else:
+                    self._menu.print("Flagging a tile which has a " + str(self._probablilities[maxProb[0]][maxProb[1]]) + "% chance of being a mine")
                     self._RClickMoves.add(self._constrainedTiles[maxProb[0]][maxProb[1]])
 
-            self.printConstrBoard()
-            time.sleep(3)
+            # self.printConstrBoard()
             for move in self._RClickMoves:
                 mousePos(self.mouseCoords(move))
                 rightClick()
@@ -320,7 +344,7 @@ class Bot:
         # ImageGrab.grab(tuple(size)).save(os.getcwd() + '\\full_snap__' + str(int(time.time())) + '.png', 'PNG')
 
         self._mapCoords = tuple(size)
-        self._tileSize = round((self._mapCoords[2] - self._mapCoords[0]) / self._size[0])
+        self._tileSize = round((self._mapCoords[2] - self._mapCoords[0]) / self._size[1])
 
     def mouseCoords(self, coords):
         newCoords = list()

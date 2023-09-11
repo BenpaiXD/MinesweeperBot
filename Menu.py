@@ -1,6 +1,7 @@
 from tkinter import *
 from tkinter import _setit
 from time import time
+import os
 
 from Bot import Bot
 
@@ -74,6 +75,9 @@ class Menu:
         mainloop()
 
     def open(self):
+        if not os.path.exists('C:\\Program Files (x86)\\chromedriver.exe'):
+            self.print("Unable to find file 'C:\\Program Files (x86)\\chromedriver.exe'. Please got to https://chromedriver.chromium.org/downloads and download the correct driver for your version of chrome")
+            return
         self._opened = True
         self._bot.launch()
         self._btnOpen['state'] = DISABLED
@@ -86,10 +90,13 @@ class Menu:
         self._btnReset['state'] = DISABLED
 
     def reset(self):
+        self.print("-----------------------\n\n\n")
+        self._bot._guesses = 0
         self.difficultyChange(self._difficulty.get())
 
     def run(self):
         self._btnRun['state'] = DISABLED
+        
         start = time()
         self._bot.run()
         end = time()
@@ -104,7 +111,7 @@ class Menu:
         self._bot.destroy()
         quit()
 
-    def print(self, string):
+    def print(self, string, colour=None):
         self._TextBox.config(state=NORMAL)
         self._TextBox.insert('1.0', string + "\n")
         self._TextBox.config(state=DISABLED)

@@ -10,6 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from Mouse import *
 from colorama import Fore
+import timeit
 
 
 class Bot:
@@ -29,7 +30,7 @@ class Bot:
         self._constrainedTiles = list()
         self._constrNumTiles = list()
         self._possibleMines = list()
-        self._probablilities = list()
+        self._probabilities = list()
         self._numMines = 0
         self._guesses = 0
         self._cap = 10
@@ -85,32 +86,45 @@ class Bot:
         self.initializeBoard()
         self._driver.find_element(By.CLASS_NAME, "dialogText").click()
 
+
+    def simpleCheck(self, board) -> list:
+        # loop through each tile on the board
+        for i in range(self._size[0]):
+            for j in range(self._size[1]):
+                # skip if tile is empty
+                if not (board[i][j] == 0 or board[i][j] == 9 or board[i][j] == -1 or
+                        self._checkedBoard[i][j]):
+                    self.checkTile(board, (i, j))
+
+
     def run(self):
         self.getMap()
-        mousePos(self.mouseCoords((round(self._size[0] / 2), round(self._size[1] / 2))))
+        
+        # Click in center of the board so we can start the game
+        mousePos(self.mouseCoords((self._size[0] - 1, 0)))
         leftClick()
+        
         self.getBoard()
-        # im.save(os.getcwd() + '\\full_snap__' + str(int(time.time())) + '.png', 'PNG')
 
-        # loop while
-        while any(9 in sublist for sublist in self._board) and not (any(-69 in sublist for sublist in self._board)) :
+        while any(9 in sublist for sublist in self._board):
             self._RClickMoves.clear()
             self._LClickMoves.clear()
             self._constrainedTiles.clear()
             self._constrNumTiles.clear()
             self._possibleMines.clear()
-            self._probablilities.clear()
+            self._probabilities.clear()
+            
+            
             self.getBoard()
+            
+            if (any(-69 in sublist for sublist in self._board)):
+                break
 
-            for i in range(self._size[0]):
-                for j in range(self._size[1]):
-                    # skip if tile is empty
-                    if not (self._board[i][j] == 0 or self._board[i][j] == 9 or self._board[i][j] == -1 or
-                            self._checkedBoard[i][j]):
-                        self.checkTile((i, j))
+            self.simpleCheck(self._board)
 
             for move in self._RClickMoves:
                 mousePos(self.mouseCoords(move))
+                self._numMines -= 1
                 rightClick()
 
             for move in self._LClickMoves:
@@ -120,14 +134,14 @@ class Bot:
             if not (len(self._RClickMoves) == len(self._LClickMoves) == 0):
                 continue
 
-            self._menu.print("Calculating possible mine configurations\n"
-                             "This may take a moment, please wait...")
-
+            #self._menu.print("Calculating possible mine configurations\n"
+            #                 "This may take a moment, please wait...")
+            
+            # Loop through each tile
             for i in range(self._size[0]):
                 for j in range(self._size[1]):
                     # skip if tile is empty
-                    if not (self._board[i][j] == 0 or self._board[i][j] == 9 or self._board[i][j] == -1 or
-                            self._checkedBoard[i][j]):
+                    if not (self._board[i][j] == 0 or self._board[i][j] == 9 or self._board[i][j] == -1 or self._checkedBoard[i][j]):
                         if not any((i, j) in subset for subset in self._constrNumTiles):
                             self._constrainedTiles.append(set())
                             self._constrNumTiles.append(set())
@@ -138,15 +152,16 @@ class Bot:
                                 self._constrNumTiles.remove(set())
 
             for k in range(len(self._constrainedTiles)):
+                # converting the sets of constrained tiles and constrained number tiles to lists 
                 self._constrNumTiles[k] = list(self._constrNumTiles[k])
                 self._constrainedTiles[k] = list(self._constrainedTiles[k])
+                
                 self._possibleMines.append(list())
-                self._probablilities.append([0] * len(self._constrainedTiles[k]))
-                self.possibleCombinations(self._constrainedTiles[k], self._constrNumTiles[k],
-                                          [False] * len(self._constrainedTiles[k]), 0)
-                for l in range(len(self._probablilities[k])):
+                self._probabilities.append([0] * len(self._constrainedTiles[k]))
+                self.possibleCombinations(self._constrainedTiles[k], self._constrNumTiles[k], [False] * len(self._constrainedTiles[k]), 0)
+                for l in range(len(self._probabilities[k])):
                     try:
-                        self._probablilities[k][l] /= len(self._possibleMines[k])
+                        self._probabilities[k][l] /= len(self._possibleMines[k])
                     except ZeroDivisionError:
                         print(self._guesses)
                         return
@@ -154,27 +169,28 @@ class Bot:
             maxProb = (0, 0)
             for i in range(len(self._constrainedTiles)):
                 for j in range(len(self._constrainedTiles[i])):
-                    if self._probablilities[i][j] == 1:
+                    if self._probabilities[i][j] == 1:
                         self._RClickMoves.add(self._constrainedTiles[i][j])
-                    elif self._probablilities[i][j] == 0:
+                    elif self._probabilities[i][j] == 0:
                         self._LClickMoves.add(self._constrainedTiles[i][j])
                     else:
-                        if self._probablilities[i][j] < self._probablilities[maxProb[0]][maxProb[1]] or 1 - self._probablilities[i][j] < self._probablilities[maxProb[0]][maxProb[1]]:
+                        if self._probabilities[i][j] < self._probabilities[maxProb[0]][maxProb[1]] or 1 - self._probabilities[i][j] < self._probabilities[maxProb[0]][maxProb[1]]:
                             maxProb = (i, j)
 
-            if len(self._RClickMoves) == len(self._LClickMoves) == 0 and not len(self._probablilities) == 0:
+            if len(self._RClickMoves) == len(self._LClickMoves) == 0 and not len(self._probabilities) == 0:
                 self._guesses += 1
                 self._menu.print("All remaining tiles have a chance of being a mine,")
-                if self._probablilities[maxProb[0]][maxProb[1]] <= 0.5:
-                    self._menu.print("Opening a tile which has a " + str(round(self._probablilities[maxProb[0]][maxProb[1]] * 100, 2)) + "% chance of being a mine")
+                if self._probabilities[maxProb[0]][maxProb[1]] <= 0.5:
+                    self._menu.print("Opening a tile which has a " + str(round(self._probabilities[maxProb[0]][maxProb[1]] * 100, 2)) + "% chance of being a mine")
                     self._LClickMoves.add(self._constrainedTiles[maxProb[0]][maxProb[1]])
                 else:
-                    self._menu.print("Flagging a tile which has a " + str(self._probablilities[maxProb[0]][maxProb[1]]) + "% chance of being a mine")
+                    self._menu.print("Flagging a tile which has a " + str(self._probabilities[maxProb[0]][maxProb[1]]) + "% chance of being a mine")
                     self._RClickMoves.add(self._constrainedTiles[maxProb[0]][maxProb[1]])
 
             # self.printConstrBoard()
             for move in self._RClickMoves:
                 mousePos(self.mouseCoords(move))
+                self._numMines -= 1
                 rightClick()
 
             for move in self._LClickMoves:
@@ -182,16 +198,49 @@ class Bot:
                 leftClick()
         print(self._guesses)
 
-    def possibleCombinations(self, constrTilesArr, numTilesArr, TFarr, index):
+
+    def countSurroundingTiles(self, coords: tuple) -> tuple:
+        # first index is for number of mines, second is for number of closed tiles
+        counts = [0, 0]
+        
+        for i in range(coords[0] - 1, coords[0] + 2):
+            for j in range(coords[1] - 1, coords[1] + 2):
+                # ensure not looking out of bounds
+                if 0 <= i < self._size[0] and 0 <= j < self._size[1]:
+                    if self._board[i][j] == -1:
+                        counts[0] += 1
+                    elif self._board[i][j] == 9:
+                        counts[1] += 1
+        return tuple(counts)
+        
+
+    def possibleCombinations(self, constrTilesArr: list, numTilesArr: list, TFarr: list, index: int):
+        """_summary_
+
+        Args:
+            constrTilesArr (list): _description_
+            numTilesArr (list): _description_
+            TFarr (list): _description_
+            index (int): _description_
+        """
+        
+        # early exit check
+        for coords in numTilesArr:
+            surroundingCount = self.countSurroundingTiles(coords)
+            numMines = surroundingCount[0]
+            numClosedTiles = surroundingCount[1]
+            
+            if numMines > self._board[coords[0]][coords[1]]:
+                # self._menu.print("early exit")
+                return
+            elif self._board[coords[0]][coords[1]] - numMines > numClosedTiles:
+                # self._menu.print("early exit")
+                return
+        
         if index == len(constrTilesArr):
             valid = True
             for coords in numTilesArr:
-                numMines = 0
-                for i in range(coords[0] - 1, coords[0] + 2):
-                    for j in range(coords[1] - 1, coords[1] + 2):
-                        if 0 <= i < self._size[0] and 0 <= j < self._size[1]:
-                            if self._board[i][j] == -1:
-                                numMines += 1
+                numMines = self.countSurroundingTiles(coords)[0]
 
                 valid = valid and numMines == self._board[coords[0]][coords[1]]
 
@@ -199,7 +248,7 @@ class Bot:
                 self._possibleMines[-1].append(list(TFarr))
                 for i in range(len(TFarr)):
                     if TFarr[i]:
-                        self._probablilities[-1][i] += 1
+                        self._probabilities[-1][i] += 1
             return
 
         self._board[constrTilesArr[index][0]][constrTilesArr[index][1]] = 0
@@ -232,34 +281,87 @@ class Bot:
                     if 0 <= i < self._size[0] and 0 <= j < self._size[1] and self._board[i][j] == 9:
                         self.getConstrainedTiles((i, j), constrTiles, constrNumTiles)
 
-    def checkTile(self, coords):
+
+    def checkTile(self, board, coords: tuple):
+        """
+        Checks the tiles around the provided numbered tile, 
+        puts surrounding tiles which must be mines in the rClickMoves array and tiles which cannot be mines in the LClickMoves array
+        uncertain tiles are left unchanged
+        
+        Args:
+            coords (tuple): coorinates of tile to check
+        """
+        
+        # Raise exception if tile being checked is not a numbered tile
+        if 9 < board[coords[0]][coords[1]] or board[coords[0]][coords[1]] < 1:
+            raise Exception(f"checkTile Exception: Can only check numbered tiles (tile at ({coords[0], coords[1]}) id {self._board[coords[0]][coords[1]]})")
+        
         blankTiles = list()
         numMines = 0
+        
+        # look at tiles 1 chessboard unit away
+        h = len(board)
+        w = len(board[0])
         for i in range(coords[0] - 1, coords[0] + 2):
             for j in range(coords[1] - 1, coords[1] + 2):
-                if 0 <= i < self._size[0] and 0 <= j < self._size[1]:
-                    # print(str(coords) + ": " + str((i, j)))
+                # skip if attemping to obsever tile out of bounds
+                if 0 <= i < h and 0 <= j < w:
+                    
                     if self._board[i][j] == 9:
                         blankTiles.append((i, j))
                     elif self._board[i][j] == -1:
                         numMines += 1
 
-        if len(blankTiles) == self._board[coords[0]][coords[1]] - numMines:
+        # if the number of blank tiles surrounding the current tile is equal to the current tile number minus the number of mines tounching the tile, the blank tiles must be mines so they are set to be flagged
+        if len(blankTiles) == board[coords[0]][coords[1]] - numMines:
             for tile in blankTiles:
                 self._RClickMoves.add(tile)
             self._checkedBoard[coords[0]][coords[1]] = True
-        elif numMines == self._board[coords[0]][coords[1]]:
+        elif numMines == board[coords[0]][coords[1]]: # if the number of mines surrounding the current tile is equal to its number, all other blank tiles can be uncovered
             for tile in blankTiles:
                 self._LClickMoves.add(tile)
             self._checkedBoard[coords[0]][coords[1]] = True
 
+
+
+
+    def getBoard_v2(self):
+        boardDiv = self._driver.find_element(By.ID, 'game')
+        tiles = boardDiv.find_elements(By.XPATH, '*')
+        
+        for element in tiles:
+            elemID = element.get_attribute("id")
+            if elemID == "" or not elemID[:6] == "square":
+                continue
+            coords = elemID.split("_")
+            coords = [int(x) for x in coords]
+            
+            elemClass = element.get_attribute("class")
+            if elemClass== "square blank":
+                self._board[coords[0]][coords[1]] = 9
+            elif elemClass == "square bombflagged":
+                self._board[coords[0]][coords[1]] = -1
+            elif elemClass == "square bombrevealed" or elemClass == "square bombdeath":
+                self._board[coords[0]][coords[1]] = -69
+            else:
+                self._board[coords[0]][coords[1]] = int(elemClass[-1])
+                
+
+
     def getBoard(self):
+        """
+        Loads the _board 2D list attribute from the browser such that numbers 1-8 are labeled as such, 
+        mines are labled as -1, unflipped tiles are nine and blank tiles are 0
+        
+        """
+        
         im = ImageGrab.grab(self._mapCoords)
         # im.save(os.getcwd() + '\\full_snap__' + str(int(time.time())) + '.png', 'PNG')
         im.convert("RGB")
         for j in range(self._size[1]):
             for i in range(self._size[0]):
                 rgb = im.getpixel(self.tileCoords((i, j)))
+                
                 # non numeric tiles
                 if rgb == (189, 189, 189):
                     coords = list(self.tileCoords((i, j)))
@@ -374,7 +476,7 @@ class Bot:
 
 
 def testConstrainedTiles():
-    bot = Bot()
+    bot = Bot(None)
     bot._board = [[-1, 2, 1, 1, 1, 2, 9, 9, 9],
                   [1, 2, -1, 2, 2, -1, 9, 9, 9],
                   [1, 2, 2, 2, -1, 3, 9, 9, 9],
@@ -415,6 +517,29 @@ def print2DList(arr):
     for x in arr:
         print(*x, sep=' ')
 
+
+def testAdvancedAlgo():
+    bot = Bot(None)
+    
+    bot._board = [[9, 9, 9, 9, 9, 9, 9, 9, 9, 2, 1, 0, 1, -1, 1, 0, 0, 1, -1, 2, 2, 2, 2, 1, 1, 0, 0, 1, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, -1, 2, 0, 1, 1, 1, 0, 0, 2, 2, 3, -1, -1, 4, -1, 1, 0, 0, 1, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, -1, 3, 0, 1, 1, 1, 0, 0, 1, -1, 2, 3, -1, -1, 2, 1, 0, 0, 1, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 5, -1, 3, 1, 2, -1, 2, 1, 1, 1, 1, 1, 1, 2, 2, 1, 0, 1, 1, 2, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, -1, 3, 3, -1, 3, 1, 2, -1, 1, 0, 1, 2, 2, 1, 0, 0, 0, 1, -1, 3, 9, 9],
+[9, 9, 9, 9, 9, 9, 3, 3, -1, 3, 4, -1, 3, 0, 1, 1, 1, 1, 2, -1, -1, 2, 1, 0, 0, 1, 2, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 2, 1, 1, 2, -1, -1, 3, 1, 1, 0, 0, 1, -1, 4, 4, -1, 1, 1, 1, 1, 1, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 2, 0, 1, 3, 4, 3, 2, -1, 1, 0, 0, 1, 1, 2, -1, 3, 3, 3, -1, 3, 2, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 1, 1, 2, -1, -1, 1, 2, 2, 2, 0, 1, 1, 1, 1, 3, -1, 3, -1, -1, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, 3, 2, 1, 2, -1, 2, 1, 2, -1, 1, 0, 2, -1, 4, 3, 3, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, 3, 1, 0, 2, -1, 2, 2, -1, 5, 3, 1, 1, 3, -1, 3, 1, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, -1, 1, 0, 1, 1, 2, 3, -1, -1, -1, 2, 1, 3, -1, 9, 9, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, 3, 1, 0, 0, 1, 2, -1, 4, 5, -1, 3, 2, -1, 4, 9, 9, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, 1, 0, 0, 0, 1, -1, 2, 2, -1, 3, -1, 2, 2, -1, 9, 9, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, 1, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 9, 9, 9, 9, 9, 9, 9],
+[9, 9, 9, 9, 9, 9, 9, 9, 9, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -1, 1, 1, 9, 9, 9, 9, 9, 9, 9]]
+    
+    
+    
 
 if __name__ == '__main__':
     testConstrainedTiles()
